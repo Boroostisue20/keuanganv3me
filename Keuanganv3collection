@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kelola Data Keuangan</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; display: flex; flex-direction: column; min-height: 100vh; }
+    header { display: flex; justify-content: space-between; align-items: center; background-color: #299990; color: white; padding: 15px 20px; border-radius: 8px; }
+    header h2 { margin: 0; font-size: 20px; }
+    .admin-name { font-weight: bold; font-size: 16px; }
+    input, button { padding: 10px; margin: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+    th { background-color: #299990; color: white; }
+    tfoot { font-weight: bold; background-color: #eee; }
+    .btn-hapus {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: red;
+      margin-left: 8px;
+    }
+    .input-bukti { width: calc(100% - 30px); padding: 5px; box-sizing: border-box; }
+    .bukti-wrapper { display: flex; align-items: center; justify-content: space-between; }
+    .target-wrapper { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; background-color: #d9f4f1; padding: 10px 20px; border-radius: 8px; }
+    .target-wrapper span { font-weight: bold; font-size: 16px; }
+    footer { text-align: center; margin-top: auto; padding: 20px; background-color: #299990; color: white; font-size: 14px; }
+    .bukti-link { text-decoration: none; color: #0077cc; margin-right: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>📒 PAYMENT AGENT UANGME</h2>
+    <div class="admin-name">Elfrida Hardian</div>
+  </header>
+
+  <form id="form">
+    <input type="date" id="tanggal" required />
+    <input type="text" id="nama" placeholder="Nama" required />
+    <input type="number" id="jumlah" placeholder="Jumlah (Rp)" required />
+    <button type="submit">Simpan</button>
+    <button type="button" onclick="exportPDF()">Export ke PDF</button>
+  </form>
+
+  <div class="target-wrapper">
+    <span>🎯 Target Payment: <span id="target">Rp 17.000.000</span></span>
+    <span>✅ Persentase: <span id="persentase">0%</span></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Tanggal</th>
+        <th>Nama</th>
+        <th>Jumlah (Rp)</th>
+        <th>Bukti Bayar</th>
+      </tr>
+    </thead>
+    <tbody id="data-body"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4">Total Payment</td>
+        <td id="total-masuk">Rp 0</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <footer>
+    &copy; 2025 PAYMENT UANGME | Dibuat oleh Elfrida Hardian
+  </footer>
+
+  <!-- JS PDF & html2canvas CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    const form = document.getElementById('form');
+    const tbody = document.getElementById('data-body');
+    const totalMasuk = document.getElementById('total-masuk');
+    const target = 17000000;
+    const persentaseDisplay = document.getElementById('persentase');
+
+    let data = JSON.parse(localStorage.getItem('keuangan')) || [];
+
+    // Perbaikan untuk data lama
+    data = data.map(item => {
+      if (!item.nama && item.keterangan) {
+        item.nama = item.keterangan;
+      }
+      return item;
+    });
+    localStorage.setItem('keuangan', JSON.stringify(data));
+
+    function formatRupiah(angka) {
+      return 'Rp ' + angka.toLocaleString('id-ID');
+    }
+
+    function render() {
+      tbody.innerHTML = '';
+      let masuk = 0;
+
+      // Urutkan berdasarkan tanggal (paling lama → terbaru)
+      data.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+      data.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        const buktiInput = `<input class="input-bukti" type="url" value="${item.bukti || ''}" onchange="updateBukti(${index}, this.value)">`;
+        const buktiLink = item.bukti ? `<a class="bukti-link" href="${item.bukti}" target="_blank">🔗</a>` : '';
+        const hapusIcon = `<button class="btn-hapus" onclick="hapusData(${index})" title="Hapus"><span>&#128465;</span></button>`;
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${item.tanggal}</td>
+          <td>${item.nama || '-'}</td>
+          <td>${formatRupiah(item.jumlah)}</td>
+          <td><div class="bukti-wrapper">${buktiLink}${buktiInput}${hapusIcon}</div></td>
+        `;
+        tbody.appendChild(tr);
+
+        masuk += item.jumlah;
+      });
+
+      totalMasuk.textContent = formatRupiah(masuk);
+      const persen = (masuk / target) * 100;
+      persentaseDisplay.textContent = persen.toFixed(2) + '%';
+    }
+
+    function updateBukti(index, value) {
+      data[index].bukti = value;
+      localStorage.setItem('keuangan', JSON.stringify(data));
+      render();
+    }
+
+    function hapusData(index) {
+      if (confirm('Yakin ingin menghapus data ini?')) {
+        data.splice(index, 1);
+        localStorage.setItem('keuangan', JSON.stringify(data));
+        render();
+      }
+    }
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const tanggal = document.getElementById('tanggal').value;
+      const nama = document.getElementById('nama').value;
+      const jumlah = parseFloat(document.getElementById('jumlah').value);
+
+      data.push({ tanggal, nama, jumlah, bukti: '' });
+      localStorage.setItem('keuangan', JSON.stringify(data));
+      form.reset();
+      render();
+    });
+
+    async function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p', 'pt', 'a4');
+
+      await html2canvas(document.body, {
+        scale: 2,
+        useCORS: true,
+      }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const imgHeight = (canvas.height * pageWidth) / canvas.width;
+	const today = new Date().toISOString().slice(0, 10); // format: 2025-06-21
+
+        doc.addImage(imgData, 'PNG', 0, 0, pageWidth, imgHeight);
+        doc.save(`Laporan-Payment-Elfrida Hardian-${today}.pdf`);
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>
